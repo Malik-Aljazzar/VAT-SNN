@@ -1,6 +1,10 @@
 from dataclasses import dataclass
+from pathlib import Path
 import numpy as np
 import torch
+
+# folder cadence/datasets, found relative to this file (parents[0] = src, parents[1] = cadence)
+DATASETS_DIR = Path(__file__).resolve().parents[1] / "datasets"
 
 # number of process and mismatch parameters per chip (Spectre variations=all)
 N_PROCESS = 9
@@ -44,8 +48,8 @@ class DatasetBuilder:
         Stores the settings for building the dataset.
 
         Args:
-            name: Name of the dataset, e.g. "ds_all". The raw data is read from ../datasets/<name>/<name>_raw.npz
-                (relative to the working directory).
+            name: Folder of the dataset inside cadence/datasets, e.g. "ds_all" or "archive/ds_all". The raw data is read from
+                cadence/datasets/<name>/<last part of name>_raw.npz, independent of the working directory.
             step: Take every step-th point of the 1 µs grid. Default 10 → one point every 10 µs.
             n_steps: Number of time steps per curve after downsampling. Default 500 → 5 ms.
             seed: Seed for shuffling the groups before the split. Same seed → same split.
@@ -167,7 +171,9 @@ class DatasetBuilder:
         Raises:
             AssertionError: If an array does not have the expected shape.
         """
-        dataset_path = f"../datasets/{self.name}/{self.name}_raw.npz"
+        # The folder may lie in a subfolder (e.g. "archive/ds_all"); the file name only uses its last part ("ds_all_raw.npz").
+        dataset_folder = DATASETS_DIR / self.name
+        dataset_path = dataset_folder / f"{dataset_folder.name}_raw.npz"
 
         with np.load(dataset_path) as raw:
             # In a 5ms long simulation of the neuron and a measurement every microsecond, vout and vg1 have 5001 measurement points for each sample.
