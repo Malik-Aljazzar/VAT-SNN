@@ -78,7 +78,21 @@ class DatasetBuilder:
 
     def _create_splits(self, vg1, vout, omega, group, process_parameters, mismatch_parameters, train_ids, validation_ids, test_ids):
         """
-        Based on raw data arrays and the information 
+        Creates one SurrogateDataset per split from the samples whose group belongs to that split.
+
+        Args:
+            vg1: Input voltage in V, shape (n, t).
+            vout: Output voltage in V, shape (n, t).
+            omega: VDD in V and temperature in °C, shape (n, 2).
+            group: Group id of every sample, shape (n,).
+            process_parameters: Process parameters, shape (n, N_PROCESS).
+            mismatch_parameters: Mismatch parameters, shape (n, N_MISMATCH).
+            train_ids: Group ids of the training split.
+            validation_ids: Group ids of the validation split.
+            test_ids: Group ids of the test split.
+
+        Returns:
+            Tuple (train_split, validation_split, test_split), each a SurrogateDataset with torch tensors.
         """
         train_rows = np.isin(group, train_ids)
         validation_rows = np.isin(group, validation_ids)
