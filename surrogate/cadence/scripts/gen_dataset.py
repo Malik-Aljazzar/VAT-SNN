@@ -12,8 +12,10 @@ Workflow (Name = dataset, e.g. ds_all):
 Variation: always process + mismatch (Spectre variations=all). ω = (VDD, T) per group, uniform
 in 1.35–1.65 V × 10–35 °C. Catalogue and parameter ranges: Plan 5.1.
 """
-# sys: command-line arguments; csv: CSV files; json: store parameters as text; re: regular expressions
-import sys, csv, json, re
+# sys: command-line arguments; csv: CSV files; json: store parameters as text; re: regular expressions; os: number of CPU cores
+import sys, csv, json, re, os
+# Pool: runs a function in several processes at once (assemble reads the result files in parallel)
+from multiprocessing import Pool
 # Path: convenient handling of file and folder paths
 from pathlib import Path
 # numpy: arrays and maths
@@ -188,6 +190,22 @@ def read_theta(th, g, stim):
     # Return the process values (list in chip order) and the mismatch values (by chip number)
     return proc, mis
 
+# Read one result CSV (assemble runs this in several processes at once, therefore a function of its own)
+def read_sim(p):
+    """vg1 and vout of one result CSV on the 1 µs grid as 32-bit numbers; None if the file has fewer than 10 rows."""
+    # column names from the header line (e.g. t,vg1,vout)
+    with open(p) as fh:
+        cols = fh.readline().strip().split(",")
+    # the numbers below the header as a table (loadtxt parses in C, ~10× faster than genfromtxt; ndmin=2: always a table)
+    a = np.loadtxt(p, delimiter=",", skiprows=1, ndmin=2)
+    # files with fewer than 10 rows are broken: assemble reports and skips them
+    if len(a) < 10:
+        return None
+    # the columns t, vg1 and vout, found by their names
+    t, vg1, vout = (a[:, cols.index(c)] for c in ("t", "vg1", "vout"))
+    # put input and output onto the exact 1 µs grid (linear interpolation) and store them as 32-bit numbers
+    return np.interp(GRID, t, vg1).astype(np.float32), np.interp(GRID, t, vout).astype(np.float32)
+
 # Merge all simulations of a dataset into one npz file plus index.csv
 def assemble(name):
     # S = stimulus folder, E = fetched results, D = output folder 03_Cadence/datasets/<Name>
@@ -202,25 +220,31 @@ def assemble(name):
     VG1, VOUT, TH, OM, rows = [], [], [], [], []
     # θ of every chip number seen so far (for the consistency check)
     theta_seen = {}
+    # jobs = one entry per result file: (signal file, its row of meta.csv, group number, θ of the signal, path)
+    jobs = []
     # For every signal in meta.csv
     for f, m in meta.items():
-        # group number, its row, and the signal name without folder and ending (e.g. A_003)
-        g = int(m["group"]); gr = groups[g]; stim = Path(f).stem
-        # first chip number of the group
-        first = int(gr["firstrun"])
-        # θ values of all chips of this group for this signal
-        proc, mis = read_theta(E / "theta", g, stim)
-        # for every result file of this signal (one per chip, e.g. A_003_i5.csv), sorted by name
-        for p in sorted((E / "sims" / f"g{g}").glob(f"{stim}_i*.csv")):
+        # group number and the signal name without folder and ending (e.g. A_003)
+        g = int(m["group"]); stim = Path(f).stem
+        # θ values of all chips of this group for this signal (process list, mismatch dict)
+        theta = read_theta(E / "theta", g, stim)
+        # one job for every result file of this signal (one per chip, e.g. A_003_i5.csv), sorted by name
+        jobs += [(f, m, g, theta, p) for p in sorted((E / "sims" / f"g{g}").glob(f"{stim}_i*.csv"))]
+    # Read the result files in parallel, one process per CPU core
+    with Pool(os.cpu_count()) as pool:
+        # imap hands the files to the processes in packets of 64 and returns the results in the order of jobs
+        sims = pool.imap(read_sim, [j[4] for j in jobs], chunksize=64)
+        # go through the jobs together with their results (input and output on the grid, or None)
+        for (f, m, g, (proc, mis), p), sim in zip(jobs, sims):
+            # files with fewer than 10 rows are broken: report and skip them
+            if sim is None:
+                print("empty:", p); continue
+            # row of the group in groups.csv and its first chip number
+            gr = groups[g]; first = int(gr["firstrun"])
             # chip number from the file name (the digits after "_i")
             chip = int(re.search(r"_i(\d+)\.csv$", p.name).group(1))
-            # read the CSV as a table with the named columns t, vg1, vout
-            a = np.genfromtxt(p, delimiter=",", names=True)
-            # files with fewer than 10 rows are broken: report and skip them
-            if len(a) < 10:
-                print("empty:", p); continue
-            # put input and output onto the exact 1 µs grid (linear interpolation)
-            vg1, vout = np.interp(GRID, a["t"], a["vg1"]), np.interp(GRID, a["t"], a["vout"])
+            # input and output of this simulation on the 1 µs grid (already 32-bit numbers)
+            vg1, vout = sim
             # θ vector of 9 process + 21 mismatch values, filled with zeros first
             th = np.zeros(len(PROC) + N_MIS)
             # if there are process values: take those of this chip (position chip − first)
@@ -236,8 +260,8 @@ def assemble(name):
                 raise RuntimeError(f"θ of chip {chip} differs between signals ({f})")
             # remember the θ of this chip
             theta_seen[key] = th
-            # store input, output and θ as 32-bit numbers
-            VG1.append(vg1.astype(np.float32)); VOUT.append(vout.astype(np.float32)); TH.append(th.astype(np.float32))
+            # store input, output and θ (θ converted to 32-bit numbers)
+            VG1.append(vg1); VOUT.append(vout); TH.append(th.astype(np.float32))
             # store ω = (VDD, T) of the group
             OM.append([float(gr["vdd"]), float(gr["temp"])])
             # index row: running number, chip, group, signal file, type, VDD, T

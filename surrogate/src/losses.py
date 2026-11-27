@@ -1,5 +1,16 @@
+from enum import Enum
+
 import torch
 import torch.nn.functional as F
+
+
+class LossType(Enum):
+    """Quantity the surrogate training minimises, chosen in the settings of the training notebook."""
+
+    # plain mean squared error of the unsmoothed curves
+    MSE = "mse"
+    # van Rossum distance plus a small share of plain MSE (see van_rossum_loss)
+    VAN_ROSSUM = "van_rossum"
 
 
 def exponential_kernel(tau_steps, length_factor=5):
@@ -64,3 +75,27 @@ def van_rossum_loss(prediction, target, tau_steps=3, mse_weight=0.1):
     van_rossum = F.mse_loss(smooth(prediction, kernel), smooth(target, kernel))
     # plus the weighted plain MSE of the unsmoothed curves
     return van_rossum + mse_weight * F.mse_loss(prediction, target)
+
+
+def compute_loss(prediction, target, loss_type, tau_steps=3, mse_weight=0.1):
+    """
+    Training loss of the kind chosen with loss_type.
+
+    Args:
+        prediction: Predicted output voltage in V, shape (b, t).
+        target: SPICE output voltage in V, shape (b, t).
+        loss_type: LossType.MSE or LossType.VAN_ROSSUM.
+        tau_steps: Time constant of the van Rossum kernel in time steps, only used for LossType.VAN_ROSSUM.
+        mse_weight: Weight of the plain MSE next to the van Rossum distance, only used for LossType.VAN_ROSSUM.
+
+    Returns:
+        Scalar loss in V².
+    """
+    # plain MSE of the unsmoothed curves
+    if loss_type is LossType.MSE:
+        return F.mse_loss(prediction, target)
+    # van Rossum distance plus the weighted plain MSE
+    if loss_type is LossType.VAN_ROSSUM:
+        return van_rossum_loss(prediction, target, tau_steps, mse_weight)
+    # any other value is a mistake in the settings
+    raise ValueError(f"unknown loss type: {loss_type}")
