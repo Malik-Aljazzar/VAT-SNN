@@ -15,7 +15,7 @@ OUT=$HOME/exports/$name/sims/g$g; TH=$HOME/exports/$name/theta; ST=$HOME/simruns
 # Netlist of an earlier ADE run (MonteCarlo.20); we take the circuit of the neuron from it
 src=$HOME/simulation/SNN_Neuron/neuron_tb/adexl/results/data/MonteCarlo.20/2/SNN_Neuron:neuron_tb:1/groupRunDataDir/netlist/input.scs
 # If the signal file is missing, write that to the status file and end the job
-[ -f "$S" ] || { echo "$(date +%T) g$g $b FEHLT" >> "$ST"; exit 1; }
+[ -f "$S" ] || { echo "$(date +%T) g$g $b MISSING" >> "$ST"; exit 1; }
 # Create the output folders (end the job on error)
 mkdir -p "$OUT" "$TH" || exit 1
 # Create an empty working folder under /tmp (XXXX is replaced randomly) so that parallel jobs do not interfere

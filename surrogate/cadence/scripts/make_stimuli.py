@@ -3,7 +3,7 @@
 Usage:
   python make_stimuli.py <target folder> test
       → one example each for types A, B, C
-  python make_stimuli.py <target folder> kaskade <count> <seed> <pool folder> [<pool folder> ...]
+  python make_stimuli.py <target folder> cascade <count> <seed> <pool folder> [<pool folder> ...]
       → type D from real vout traces (CSV with column "vout" or OCEAN text), plus meta.csv
 Format per line: "<t in s> <V in V>". All signals start at 0 V, length 5 ms, range 0–1.65 V.
 """
@@ -216,7 +216,7 @@ def typ_d(rng, pool, vdd=1.5, k_range=(2, 8), p_inv=0.3, lo=0.75, hi=1.15, min_f
             # Return grid, signal and parameters
             return GRID, v, meta
     # No attempt was good enough: stop with an error
-    raise RuntimeError("kein passendes Kaskaden-Signal gefunden")
+    raise RuntimeError("no suitable cascade signal found")
 
 # Only when this file is run directly (not when gen_dataset.py imports it):
 if __name__ == "__main__":
@@ -232,8 +232,8 @@ if __name__ == "__main__":
         write(out / "B_steps.pwl", *typ_b([1.2, 0.85, 1.05, 0.6, 1.4], [1e-3, 0.8e-3, 1.2e-3, 0.5e-3, 2e-3]))
         # C: offset 0.95 V plus two sines (0.25 V at 400 Hz, 0.08 V at 2300 Hz)
         write(out / "C_sine.pwl", *typ_c(0.95, [(0.25, 400, 0.0), (0.08, 2300, 1.0)]))
-    # Mode "kaskade": type D signals from the vout traces in the given folders
-    elif mode == "kaskade":
+    # Mode "cascade": type D signals from the vout traces in the given folders
+    elif mode == "cascade":
         # number of signals, seed and pool folders from the arguments
         n, seed, folders = int(sys.argv[3]), int(sys.argv[4]), sys.argv[5:]
         # random number generator with this seed (same seed → same signals)
@@ -241,13 +241,13 @@ if __name__ == "__main__":
         # load the vout traces (default VDD 1.5 V, all signal types)
         pool, names = load_pool(folders)
         # feedback: size of the pool and its folders
-        print(f"Pool: {len(pool)} vout-Verläufe aus {', '.join(Path(f).name for f in folders)}")
+        print(f"Pool: {len(pool)} vout traces from {', '.join(Path(f).name for f in folders)}")
         # open meta.csv for writing
         with open(out / "meta.csv", "w", newline="") as fm:
             # CSV writer for this file
             wr = csv.writer(fm)
-            # header line (column names in German)
-            wr.writerow(["datei", "typ", "k", "eingaenge", "invertiert", "verzoegerung_us", "gewichte", "w_bias", "w_masse", "anteil_0.75_1.15V"])
+            # header line
+            wr.writerow(["file", "type", "k", "inputs", "inverted", "shift_us", "w_inputs", "w_bias", "w_ground", "frac_0.75_1.15V"])
             # n signals
             for i in range(n):
                 # draw one cascade signal
@@ -261,4 +261,4 @@ if __name__ == "__main__":
     # Feedback for every PWL file in the target folder …
     for p in sorted(out.glob("*.pwl")):
         # … its name and number of lines (sum(1 for _ in open(p)) counts the lines)
-        print(p.name, sum(1 for _ in open(p)), "Zeilen")
+        print(p.name, sum(1 for _ in open(p)), "lines")

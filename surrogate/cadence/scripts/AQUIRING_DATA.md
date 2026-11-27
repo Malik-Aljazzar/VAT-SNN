@@ -48,7 +48,7 @@ The results are located in `exports/<Name>` on the same level as the `stimuli` f
 Based on this data you can simulate the last group too. This group has the outputs of a neuron as input (cascade); I refer to it as group D. This produces `jobs_cascade.txt`.
 
 ```powershell
-gen_dataset.py kaskade <Name> <Cascades per Group> <Cascade-Seed>
+gen_dataset.py cascade <Name> <Cascades per Group> <Cascade-Seed>
 ```
 
 ## 5. Simulate and fetch the cascade

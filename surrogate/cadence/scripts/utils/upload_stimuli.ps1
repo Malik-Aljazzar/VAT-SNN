@@ -12,7 +12,7 @@ $H = "i83compute3"
 # Local folder 03_Cadence/stimuli (two levels above this file: utils → scripts → 03_Cadence)
 $stim = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "stimuli"
 # Stop with an error message if the folder of this dataset does not exist
-if (-not (Test-Path (Join-Path $stim $Name))) { throw "$stim\$Name fehlt" }
+if (-not (Test-Path (Join-Path $stim $Name))) { throw "$stim\$Name is missing" }
 # Create the folder ~/stimuli on the server (-p: no error if it already exists); BatchMode: never ask for a password
 ssh -o BatchMode=yes $H "mkdir -p ~/stimuli"
 # Change into the local stimuli folder, so that scp gets a short relative path (with "C:\…" it could take "C" for a server)
@@ -30,4 +30,4 @@ try {
 # Count the signal files that are now on the server, as a check
 $n = ssh -o BatchMode=yes $H "find ~/stimuli/$Name -name '*.pwl' | wc -l"
 # and print the number
-Write-Output "Signale hochgeladen: ~/stimuli/$Name ($n PWL-Dateien auf dem Server)"
+Write-Output "Signals uploaded: ~/stimuli/$Name ($n PWL files on the server)"

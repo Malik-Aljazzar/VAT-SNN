@@ -17,10 +17,10 @@ Push-Location (Split-Path $PSScriptRoot -Parent)
 try {
     # For each of the two scripts needed on the server:
     foreach ($f in "psf_to_csv.py", "gen_job.sh") {
-        # upload it via scp (copy over ssh) under the hidden name .<file>.neu (-q: no progress output)
-        scp -q -o BatchMode=yes $f "${H}:simruns/_scripts/.$f.neu"
+        # upload it via scp (copy over ssh) under the hidden name .<file>.new (-q: no progress output)
+        scp -q -o BatchMode=yes $f "${H}:simruns/_scripts/.$f.new"
         # rename it on the server to its real name (-f: overwrite an existing file)
-        ssh -o BatchMode=yes $H "mv -f ~/simruns/_scripts/.$f.neu ~/simruns/_scripts/$f"
+        ssh -o BatchMode=yes $H "mv -f ~/simruns/_scripts/.$f.new ~/simruns/_scripts/$f"
     # end of the loop
     }
 # in any case (also after an error):
@@ -30,4 +30,4 @@ try {
 # end of try/finally
 }
 # Short confirmation
-Write-Output "Server-Skripte hochgeladen: psf_to_csv.py, gen_job.sh"
+Write-Output "Server scripts uploaded: psf_to_csv.py, gen_job.sh"

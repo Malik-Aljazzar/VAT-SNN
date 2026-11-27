@@ -30,7 +30,7 @@ picks = []
 # For every signal type
 for typ in "ABCD":
     # the first simulation of this type with this chip (None if there is none)
-    r = next((r for r in idx if r["typ"] == typ and int(r["chip"]) == chip), None)
+    r = next((r for r in idx if r["type"] == typ and int(r["chip"]) == chip), None)
     # if one was found:
     if r:
         # take it
@@ -46,7 +46,7 @@ for ax, r in zip(np.atleast_1d(axes), picks):
     # input vg1 (blue, thicker line)
     ax.plot(t, d["vg1"][n], color=C_IN, lw=1.5, label="vg1")
     # title: type, signal file, chip, VDD and T
-    ax.set_title(f"Typ {r['typ']} · {r['signal']} · Chip {chip} · VDD {float(r['vdd']):.3f} V, T {float(r['temp']):.1f} °C",
+    ax.set_title(f"Type {r['type']} · {r['signal']} · Chip {chip} · VDD {float(r['vdd']):.3f} V, T {float(r['temp']):.1f} °C",
                  loc="left", fontsize=9)
     # voltage axis from −0.05 to 1.7 V; small grey axis numbers
     ax.set_ylim(-0.05, 1.7); ax.tick_params(labelsize=8, colors=MUTED)

@@ -57,11 +57,11 @@ for name in names:
         # input = 32 conditioning values followed by the 500 vg1 values; output = the 500 vout values
         X[sp].append(np.concatenate([cond[k], vg1[k]])); Y[sp].append(vout[k])
         # row for split.csv: dataset, number in the raw data, chip key, type, part
-        rows.append([name, r["n"], keys[k], r["typ"], sp])
+        rows.append([name, r["n"], keys[k], r["type"], sp])
     # number of simulations per part for this dataset
     cnt = {s: sum(1 for x in rows if x[0] == name and x[4] == s) for s in X}
     # feedback: number of chips and simulations per part
-    print(f"{name}: {len(uniq)} Chips/Gruppen → {cnt}")
+    print(f"{name}: {len(uniq)} chips/groups → {cnt}")
 # Output folder 03_Cadence/datasets/<output name>, created if needed
 D = ROOT / "datasets" / out_name; D.mkdir(parents=True, exist_ok=True)
 # the dict that is saved
@@ -73,14 +73,14 @@ for s in X:
     # outputs as a tensor of shape (N, 500)
     data[f"Y_{s}"] = torch.tensor(np.array(Y[s]), dtype=torch.float32)
 # description of the format, saved in the same file
-data["info"] = {"dt": 10e-6, "n_steps": N_T, "n_cond": 32, "cond_layout": "Präfix: 9 Process, 21 Mismatch, VDD_n, T_n",
-                "omega_norm": "VDD_n = (VDD-1.5)/0.15, T_n = (T-22.5)/12.5", "split": "nach Chip, 70/20/10 je Datensatz, Seed 0",
-                "quellen": names}
+data["info"] = {"dt": 10e-6, "n_steps": N_T, "n_cond": 32, "cond_layout": "prefix: 9 process, 21 mismatch, VDD_n, T_n",
+                "omega_norm": "VDD_n = (VDD-1.5)/0.15, T_n = (T-22.5)/12.5", "split": "by chip, 70/20/10 per dataset, seed 0",
+                "sources": names}
 # Save the dict as a .ds file (torch format)
 torch.save(data, D / f"{out_name}.ds")
 # Write split.csv
 with open(D / "split.csv", "w", newline="") as fo:
-    # header line (column names in German) and one row per simulation
-    w = csv.writer(fo); w.writerow(["datensatz", "n", "chip_schluessel", "typ", "split"]); w.writerows(rows)
+    # header line and one row per simulation
+    w = csv.writer(fo); w.writerow(["dataset", "n", "chip_key", "type", "split"]); w.writerows(rows)
 # Feedback: shape of every tensor and the output file
 print({k: tuple(v.shape) for k, v in data.items() if k != "info"}, "→", D / f"{out_name}.ds")

@@ -4,7 +4,7 @@ Workflow (Name = dataset, e.g. ds_all):
   1. python gen_dataset.py plan <Name> <groups> <chips/group> <MC seed> <signal seed> [A B C]
        → 03_Cadence/stimuli/<Name>/g<k>/*.pwl, jobs1.txt, groups.csv, meta.csv   (then upload_stimuli.sh <Name>)
      Server: run_remote.sh gen_run.sh <Name> jobs1.txt <parallel>   → fetch_tar.sh <Name>
-  2. python gen_dataset.py kaskade <Name> <D per group> <seed>
+  2. python gen_dataset.py cascade <Name> <D per group> <seed>
        → type D signals per group from that group's own A/B/C vout traces, jobs2.txt  (upload, gen_run.sh … jobs2.txt, fetch)
   3. python gen_dataset.py assemble <Name>
        → 03_Cadence/datasets/<Name>/<Name>_raw.npz (vg1, vout on the 1 µs grid, θ, ω, metadata) + index.csv
@@ -99,21 +99,21 @@ def plan(name, n_groups, per_group, mc_seed, stim_seed, counts):
                 jobs.append(f"{g} {first} {per_group} {vdd} {temp} {mc_seed} {f}")
     # Write groups.csv
     with open(S / "groups.csv", "w", newline="") as fo:
-        # header line (column names in German) and one row per group
-        w = csv.writer(fo); w.writerow(["gruppe", "firstrun", "numruns", "vdd", "temp", "mc_seed"]); w.writerows(groups)
+        # header line and one row per group
+        w = csv.writer(fo); w.writerow(["group", "firstrun", "numruns", "vdd", "temp", "mc_seed"]); w.writerows(groups)
     # Write meta.csv
     with open(S / "meta.csv", "w", newline="") as fo:
         # header line and one row per signal
-        w = csv.writer(fo); w.writerow(["datei", "gruppe", "typ", "parameter"]); w.writerows(metas)
+        w = csv.writer(fo); w.writerow(["file", "group", "type", "parameters"]); w.writerows(metas)
     # Write jobs1.txt with Unix line endings (it is read on the server)
     with open(S / "jobs_base_stimuli.txt", "w", newline="\n") as fo:
         # one job per line
         fo.write("\n".join(jobs) + "\n")
     # Feedback: groups, chips, jobs and simulations (= jobs × chips per group)
-    print(f"{name}: {n_groups} Gruppen × {per_group} Chips, {len(jobs)} Jobs (Stufe 1) = {len(jobs) * per_group} Simulationen")
+    print(f"{name}: {n_groups} groups × {per_group} chips, {len(jobs)} jobs (stage 1) = {len(jobs) * per_group} simulations")
 
 # Stage 2: type D signals per group from that group's own stage-1 vout traces, job file jobs2.txt
-def kaskade(name, n_d, seed):
+def cascade(name, n_d, seed):
     # Random number generator for the cascade signals
     rng = np.random.default_rng(seed)
     # S = stimulus folder, E = fetched results of stage 1 (03_Cadence/exports/<Name>/sims)
@@ -125,7 +125,7 @@ def kaskade(name, n_d, seed):
     # For every group
     for gr in groups:
         # group number and its VDD
-        g, vdd = int(gr["gruppe"]), float(gr["vdd"])
+        g, vdd = int(gr["group"]), float(gr["vdd"])
         # load the vout traces of this group (only types A/B/C, at least 2 spikes) as the pool
         pool, names = load_pool([E / f"g{g}"], vdd=vdd, types=POOL_TYPES)
         # n_d cascade signals for this group
@@ -141,7 +141,7 @@ def kaskade(name, n_d, seed):
             # job line with the values of the group
             jobs.append(f"{g} {gr['firstrun']} {gr['numruns']} {gr['vdd']} {gr['temp']} {gr['mc_seed']} {f}")
         # feedback per group: size of the pool and number of new signals
-        print(f"g{g}: Pool {len(pool)} Verläufe → {n_d} Kaskaden-Signale")
+        print(f"g{g}: pool {len(pool)} traces → {n_d} cascade signals")
     # Append the new signals to meta.csv ("a" = append instead of overwrite)
     with open(S / "meta.csv", "a", newline="") as fo:
         # one row per new signal
@@ -151,7 +151,7 @@ def kaskade(name, n_d, seed):
         # one job per line
         fo.write("\n".join(jobs) + "\n")
     # Feedback: number of jobs
-    print(f"{len(jobs)} Jobs (Stufe 2)")
+    print(f"{len(jobs)} jobs (stage 2)")
 
 def read_theta(th, g, stim):
     """θ per chip from processData (9 relevant columns) and mismatchData (21 values); missing → 0."""
@@ -195,9 +195,9 @@ def assemble(name):
     # create the output folder if needed
     D.mkdir(parents=True, exist_ok=True)
     # groups by number: {group number: row of groups.csv}
-    groups = {int(r["gruppe"]): r for r in csv.DictReader(open(S / "groups.csv"))}
+    groups = {int(r["group"]): r for r in csv.DictReader(open(S / "groups.csv"))}
     # signals by file name: {signal file: row of meta.csv}
-    meta = {r["datei"]: r for r in csv.DictReader(open(S / "meta.csv"))}
+    meta = {r["file"]: r for r in csv.DictReader(open(S / "meta.csv"))}
     # collected: inputs, outputs, θ, ω and index rows of all simulations
     VG1, VOUT, TH, OM, rows = [], [], [], [], []
     # θ of every chip number seen so far (for the consistency check)
@@ -205,7 +205,7 @@ def assemble(name):
     # For every signal in meta.csv
     for f, m in meta.items():
         # group number, its row, and the signal name without folder and ending (e.g. A_003)
-        g = int(m["gruppe"]); gr = groups[g]; stim = Path(f).stem
+        g = int(m["group"]); gr = groups[g]; stim = Path(f).stem
         # first chip number of the group
         first = int(gr["firstrun"])
         # θ values of all chips of this group for this signal
@@ -218,7 +218,7 @@ def assemble(name):
             a = np.genfromtxt(p, delimiter=",", names=True)
             # files with fewer than 10 rows are broken: report and skip them
             if len(a) < 10:
-                print("leer:", p); continue
+                print("empty:", p); continue
             # put input and output onto the exact 1 µs grid (linear interpolation)
             vg1, vout = np.interp(GRID, a["t"], a["vg1"]), np.interp(GRID, a["t"], a["vout"])
             # θ vector of 9 process + 21 mismatch values, filled with zeros first
@@ -233,7 +233,7 @@ def assemble(name):
             key = chip
             # if this chip was seen before with different θ: stop with an error
             if key in theta_seen and not np.allclose(theta_seen[key], th):
-                raise RuntimeError(f"θ von Chip {chip} unterscheidet sich zwischen Signalen ({f})")
+                raise RuntimeError(f"θ of chip {chip} differs between signals ({f})")
             # remember the θ of this chip
             theta_seen[key] = th
             # store input, output and θ as 32-bit numbers
@@ -241,7 +241,7 @@ def assemble(name):
             # store ω = (VDD, T) of the group
             OM.append([float(gr["vdd"]), float(gr["temp"])])
             # index row: running number, chip, group, signal file, type, VDD, T
-            rows.append([len(rows), chip, g, f, m["typ"], gr["vdd"], gr["temp"]])
+            rows.append([len(rows), chip, g, f, m["type"], gr["vdd"], gr["temp"]])
     # Save everything compressed in <Name>_raw.npz: one array per field (chip and group taken from the index rows)
     np.savez_compressed(D / f"{name}_raw.npz", vg1=np.array(VG1), vout=np.array(VOUT), theta=np.array(TH),
                         omega=np.array(OM, dtype=np.float32), chip=np.array([r[1] for r in rows]),
@@ -250,15 +250,15 @@ def assemble(name):
     # Write index.csv
     with open(D / "index.csv", "w", newline="") as fo:
         # header line and one row per simulation
-        w = csv.writer(fo); w.writerow(["n", "chip", "gruppe", "signal", "typ", "vdd", "temp"]); w.writerows(rows)
+        w = csv.writer(fo); w.writerow(["n", "chip", "group", "signal", "type", "vdd", "temp"]); w.writerows(rows)
     # number of simulations per signal type
     types = {t: sum(1 for r in rows if r[4] == t) for t in "ABCD"}
     # Feedback: simulations, chips, types and output file
-    print(f"{name}: {len(rows)} Simulationen, {len(theta_seen)} Chips, Typen {types} → {D / (name + '_raw.npz')}")
+    print(f"{name}: {len(rows)} simulations, {len(theta_seen)} chips, types {types} → {D / (name + '_raw.npz')}")
 
 # Only when this file is run directly:
 if __name__ == "__main__":
-    # command (plan / kaskade / assemble) and dataset name from the arguments
+    # command (plan / cascade / assemble) and dataset name from the arguments
     cmd, name = sys.argv[1], sys.argv[2]
     # plan: arguments groups, chips per group, MC seed, signal seed, optionally the counts of A, B, C
     if cmd == "plan":
@@ -268,10 +268,10 @@ if __name__ == "__main__":
         cnt = [int(x) for x in sys.argv[7:10]] if len(sys.argv) >= 10 else [5, 3, 3]
         # run stage 1; dict(zip("ABC", cnt)) gives {"A": …, "B": …, "C": …}
         plan(name, n_g, per, mcs, sts, dict(zip("ABC", cnt)))
-    # kaskade: arguments D signals per group and seed
-    elif cmd == "kaskade":
+    # cascade: arguments D signals per group and seed
+    elif cmd == "cascade":
         # run stage 2
-        kaskade(name, int(sys.argv[3]), int(sys.argv[4]))
+        cascade(name, int(sys.argv[3]), int(sys.argv[4]))
     # assemble: no further arguments
     elif cmd == "assemble":
         # merge everything

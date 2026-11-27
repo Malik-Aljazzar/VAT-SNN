@@ -4,12 +4,13 @@
 #   conda activate vat_snn
 #   pip install -r requirements.txt
 
-# PyTorch wheels with CUDA 12.8 for the local NVIDIA GPU (PyPI only has CPU wheels for Windows)
---extra-index-url https://download.pytorch.org/whl/cu128
+# PyTorch wheels with CUDA 13.2 for the local NVIDIA GPU (PyPI only has CPU wheels for Windows)
+--extra-index-url https://download.pytorch.org/whl/cu132
 
 # arrays and maths (all scripts)
 numpy>=1.24
 # plots (plots/plot_dataset_samples.py, qc_dataset.py)
 matplotlib>=3.7
 # tensors and the .ds format that FlexSpike reads (build_ds.py), training
-torch>=2.4
+# pinned to the CUDA build: without the "+cu132" pip would take a newer CPU-only version from PyPI
+torch==2.15.0+cu132

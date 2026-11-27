@@ -1,5 +1,5 @@
 # Shows the progress of the current run of a dataset on the server, every 5 seconds one line in the console.
-# Stops by itself when the run is done (line "FERTIG" in the status file), otherwise with Ctrl+C (the run keeps going).
+# Stops by itself when the run is done (line "DONE" in the status file), otherwise with Ctrl+C (the run keeps going).
 # Usage (PowerShell, in this folder): .\status.ps1 <Name> [<seconds>]   (server: entry "i83compute3" in ~/.ssh/config)
 
 # Read the arguments: dataset name and the waiting time between two lines (default 5 s)
@@ -20,13 +20,13 @@ while ($true) {
     # Run the command on the server (BatchMode: never ask for a password); @(…) always gives a list of lines
     $lines = @(ssh -o BatchMode=yes $H $cmd)
     # If the connection failed: say so, wait and try again
-    if ($LASTEXITCODE -ne 0) { Write-Output "$now  keine Verbindung zum Server, neuer Versuch …"; Wait-Rest $t0; continue }
+    if ($LASTEXITCODE -ne 0) { Write-Output "$now  no connection to the server, trying again …"; Wait-Rest $t0; continue }
     # Number of running Spectre processes (last line "SPECTRE <n>")
     $spectre = ($lines[-1] -replace "SPECTRE ", "")
     # Line number of the last START line: the current run (earlier runs of the same dataset stand above it)
     $start = ($lines | Select-String " START " | Select-Object -Last 1).LineNumber
     # No START line yet: say so, wait and look again
-    if (-not $start) { Write-Output "$now  noch kein Lauf für $Name gestartet"; Wait-Rest $t0; continue }
+    if (-not $start) { Write-Output "$now  no run started for $Name yet"; Wait-Rest $t0; continue }
     # Lines of the current run: from the START line on, without the last line (Spectre count); @(…) keeps it a list
     $run = @($lines[($start - 1)..($lines.Count - 2)])
     # The START line looks like "14:34:28 START jobs_base_stimuli.txt (1200 Jobs, 8 parallel)"
@@ -35,22 +35,22 @@ while ($true) {
     $file = ($head -split " ")[2]
     # total number of jobs = the number in front of "Jobs"
     $total = [int][regex]::Match($head, "\((\d+) Jobs").Groups[1].Value
-    # finished jobs = lines with a return code ("rc=…") or with a missing signal file ("FEHLT")
-    $done = @($run | Where-Object { $_ -match " rc=| FEHLT$" })
+    # finished jobs = lines with a return code ("rc=…") or with a missing signal file ("MISSING")
+    $done = @($run | Where-Object { $_ -match " rc=| MISSING$" })
     # failed jobs = Spectre error (rc ≠ 0), no CSV written (n=0) or signal file missing
-    $errors = @($run | Where-Object { $_ -match " rc=[1-9]| n=0 | FEHLT$" })
+    $errors = @($run | Where-Object { $_ -match " rc=[1-9]| n=0 | MISSING$" })
     # share of finished jobs in percent (0 if the total is unknown)
     $pct = if ($total) { [math]::Round(100 * $done.Count / $total) } else { 0 }
     # last finished job, e.g. "14:34:33 g0 B_000 rc=0 n=10 5s" (empty if none yet)
     $last = if ($done.Count) { $done[-1] } else { "–" }
     # Print one status line
-    Write-Output "$now  ${file}: $($done.Count)/$total Jobs fertig ($pct %), Fehler $($errors.Count), Spectre-Prozesse $spectre  ·  zuletzt: $last"
-    # Is the run done (a line with "FERTIG")?
-    if ($run -match " FERTIG ") {
+    Write-Output "$now  ${file}: $($done.Count)/$total jobs done ($pct %), errors $($errors.Count), Spectre processes $spectre  ·  last: $last"
+    # Is the run done (a line with "DONE")?
+    if ($run -match " DONE ") {
         # list every failed job
-        foreach ($e in $errors) { Write-Output "  Fehler: $e" }
+        foreach ($e in $errors) { Write-Output "  error: $e" }
         # final message with the next step
-        Write-Output "Lauf fertig. Ergebnisse holen: .\fetch_tar.ps1 $Name"
+        Write-Output "Run done. Fetch the results: .\fetch_tar.ps1 $Name"
         # leave the loop
         break
     # end of the condition

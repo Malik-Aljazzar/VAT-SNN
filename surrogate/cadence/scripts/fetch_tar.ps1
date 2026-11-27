@@ -46,4 +46,4 @@ try {
 # Count the CSV files that are now in the local folder (-Recurse: including subfolders)
 $n = (Get-ChildItem (Join-Path $dst $Name) -Recurse -Filter *.csv -File).Count
 # and print the number
-Write-Output "${Name}: $n CSV lokal"
+Write-Output "${Name}: $n CSV files locally"

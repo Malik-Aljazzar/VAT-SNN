@@ -3,12 +3,13 @@ from pathlib import Path
 from constants import N_MISMATCH, N_PROCESS, N_V_T_VALUES
 import numpy as np
 import torch
+from torch.utils.data import DataLoader, Dataset
 
 # folder surrogate/cadence/datasets, found relative to this file (parents[0] = src, parents[1] = surrogate)
 DATASETS_DIR = Path(__file__).resolve().parents[1] / "cadence" / "datasets"
 
 @dataclass
-class SurrogateDataset:
+class SurrogateDataset(Dataset):
     input_voltage: torch.Tensor
     output_voltage: torch.Tensor
     process_parameters: torch.Tensor
@@ -31,11 +32,38 @@ class SurrogateDataset:
         assert self.vdd.shape == (n,)
         assert self.temperature.shape == (n,)
 
+    def __len__(self):
+        """
+        Returns:
+            Number of samples (curves) in the dataset. The DataLoader needs it to know how many batches there are.
+        """
+        return self.input_voltage.shape[0]
+
+    def __getitem__(self, index):
+        """
+        Returns one sample. The DataLoader calls this for every index of a batch and stacks the results.
+
+        Args:
+            index: Number of the sample.
+
+        Returns:
+            Tuple (input_voltage, process_parameters, mismatch_parameters, vdd, temperature, output_voltage): the five model inputs in
+            the order of SurrogateTransformer.forward, the target curve last.
+        """
+        return (self.input_voltage[index], self.process_parameters[index], self.mismatch_parameters[index],
+                self.vdd[index], self.temperature[index], self.output_voltage[index])
+
 @dataclass
 class SurrogateSplits:
     train_split: SurrogateDataset
     validation_split: SurrogateDataset
     test_split: SurrogateDataset
+
+@dataclass
+class SurrogateLoaders:
+    train_loader: DataLoader
+    validation_loader: DataLoader
+    test_loader: DataLoader
 
 
 class DatasetBuilder:
@@ -75,6 +103,26 @@ class DatasetBuilder:
         train_split, validation_split, test_split = self._create_splits(vg1, vout, omega, group, process_parameters, mismatch_parameters, train_ids, validation_ids, test_ids)
 
         return SurrogateSplits(train_split=train_split, validation_split=validation_split, test_split=test_split)
+
+    def build_loaders(self, batch_size) -> SurrogateLoaders:
+        """
+        Builds the three splits like build() and wraps every split into a DataLoader that delivers mini-batches for training.
+
+        Args:
+            batch_size: Number of curves per mini-batch.
+
+        Returns:
+            SurrogateLoaders with one DataLoader per split. Only the training loader shuffles (new random order every epoch).
+            The underlying SurrogateDataset of a loader is available as loader.dataset.
+        """
+        splits = self.build()
+
+        # The training batches are drawn in a new random order every epoch, validation and test keep their order.
+        return SurrogateLoaders(
+            train_loader=DataLoader(splits.train_split, batch_size=batch_size, shuffle=True),
+            validation_loader=DataLoader(splits.validation_split, batch_size=batch_size),
+            test_loader=DataLoader(splits.test_split, batch_size=batch_size),
+        )
 
     def _create_splits(self, vg1, vout, omega, group, process_parameters, mismatch_parameters, train_ids, validation_ids, test_ids):
         """

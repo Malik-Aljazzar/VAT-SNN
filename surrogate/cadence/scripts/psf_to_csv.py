@@ -44,4 +44,4 @@ with open(out, "w") as fo:
             # … write one line: time and signal values with 6 significant digits, separated by commas
             fo.write(",".join(f"{r[k]:.6g}" for k in ["t"] + sigs) + "\n")
 # Feedback: name of the CSV file and number of time points read
-print(f"{out}: {len(rows)} Zeitpunkte")
+print(f"{out}: {len(rows)} time points")
